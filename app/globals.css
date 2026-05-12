@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  image-rendering: pixelated;
+}
+
+html,
+body {
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-family: "Press Start 2P", monospace;
+  overflow: hidden;
+}
+
+/* CRT scanlines */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(255, 255, 255, 0.02) 2px,
+    rgba(255, 255, 255, 0.02) 3px
+  );
+}
+
+/* Vignette */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.6) 100%);
+}
+
+/* CodeMirror integration with arcade theme */
+.cm-editor {
+  background: transparent !important;
+  font-family: "VT323", monospace !important;
+  font-size: 16px !important;
+  height: 100% !important;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+.cm-scroller {
+  font-family: "VT323", monospace !important;
+}
+.cm-content {
+  color: #00ff7f !important;
+  caret-color: #00ff7f !important;
+}
+.cm-gutters {
+  background: transparent !important;
+  border-right: 1px dotted #4444aa !important;
+  color: #4444aa !important;
+}
+.cm-activeLine,
+.cm-activeLineGutter {
+  background: rgba(0, 255, 127, 0.05) !important;
+}
+.cm-tooltip-lint {
+  font-family: "VT323", monospace !important;
+  background: #000 !important;
+  border: 2px solid #ff2020 !important;
+  color: #ff2020 !important;
+}
