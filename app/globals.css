@@ -53,6 +53,7 @@ body::after {
 }
 .cm-scroller {
   font-family: "VT323", monospace !important;
+  overflow-y: auto !important;
 }
 .cm-content {
   color: #00ff7f !important;
