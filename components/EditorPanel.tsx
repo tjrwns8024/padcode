@@ -14,6 +14,7 @@ const arcadeTheme = EditorView.theme(
       color: "#00ff7f",
       height: "100%",
     },
+    ".cm-scroller": { overflow: "auto" },
     ".cm-content": { caretColor: "#00ff7f", fontFamily: '"VT323", monospace' },
     ".cm-cursor": { borderLeftColor: "#00ff7f", borderLeftWidth: "2px" },
     ".cm-line": { padding: "0 6px" },
@@ -36,7 +37,7 @@ export function EditorPanel() {
   }, [cell?.code, selectedCellId]);
 
   return (
-    <aside className="border-4 border-arcade-maze bg-arcade-bg flex flex-col overflow-hidden">
+    <aside className="border-4 border-arcade-maze bg-arcade-bg flex flex-col overflow-hidden h-full">
       <div className="bg-arcade-maze px-3.5 py-2.5 flex justify-between items-center">
         <div className="text-[9px] tracking-[2px] text-arcade-dot">CODE.SYS</div>
         <div className="text-[8px] tracking-[1px] text-arcade-pac">
@@ -45,14 +46,17 @@ export function EditorPanel() {
       </div>
 
       <div
-        className="flex-1 overflow-hidden"
+        className="flex-1 relative min-h-0"
         style={{
           backgroundImage:
             "repeating-linear-gradient(0deg, transparent 0, transparent 22px, rgba(0,255,127,.03) 22px, rgba(0,255,127,.03) 24px), linear-gradient(#000,#000)",
         }}
       >
         {selectedCellId && cell ? (
+          <div className="absolute inset-0">
           <CodeMirror
+            height="100%"
+            style={{ height: "100%" }}
             value={cell.code}
             onChange={(v) => setCode(selectedCellId, v)}
             theme={arcadeTheme}
@@ -65,6 +69,7 @@ export function EditorPanel() {
             extensions={[javascript(), dslLinter, dslAutocomplete]}
             placeholder={"// 셀에 사운드 코드를 입력하세요\n// 예) 사인파(440).게인(0.5).딜레이(0.125)"}
           />
+          </div>
         ) : (
           <div className="font-crt text-[16px] text-arcade-phosphor opacity-50 p-4 leading-relaxed">
             <div>REM PADCODE READY</div>
