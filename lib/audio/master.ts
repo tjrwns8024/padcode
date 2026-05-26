@@ -13,7 +13,7 @@ export function getMaster(): Tone.Gain {
     analyser = new Tone.Analyser({
       type: "fft",
       size: 64,
-      smoothing: 0.7,
+      smoothing: 0.4,
     });
     master.connect(analyser);
 
@@ -36,18 +36,23 @@ export function getRecorder(): Tone.Recorder {
 export function readFftLevels(binCount: number): number[] {
   if (!analyser) return new Array(binCount).fill(0);
   const raw = analyser.getValue() as Float32Array;
+  // The top FFT bins (highest frequencies) carry almost no energy and would
+  // leave the right side of the bar row dead — only spread the lively portion.
+  const usable = Math.max(binCount, Math.floor(raw.length * 0.72));
   const out: number[] = [];
-  const groupSize = Math.max(1, Math.floor(raw.length / binCount));
+  const groupSize = Math.max(1, Math.floor(usable / binCount));
   for (let i = 0; i < binCount; i++) {
-    let sum = 0;
-    let count = 0;
-    for (let j = i * groupSize; j < (i + 1) * groupSize && j < raw.length; j++) {
-      sum += raw[j];
-      count++;
+    let max = -Infinity;
+    for (let j = i * groupSize; j < (i + 1) * groupSize && j < usable; j++) {
+      if (raw[j] > max) max = raw[j];
     }
-    const avgDb = count > 0 ? sum / count : -100;
-    const norm = Math.max(0, Math.min(1, (avgDb + 100) / 70));
-    out.push(norm);
+    const db = max === -Infinity ? -100 : max;
+    // Map -85..-20 dB → 0..1, then apply a perceptual curve so quiet bins still
+    // dance, and a gentle high-frequency tilt to keep the right side alive.
+    let norm = Math.max(0, Math.min(1, (db + 85) / 65));
+    norm = Math.pow(norm, 0.6);
+    norm *= 1 + (i / binCount) * 0.6;
+    out.push(Math.min(1, norm));
   }
   return out;
 }

@@ -25,9 +25,13 @@ export function Visualizer() {
     setMounted(true);
     let raf = 0;
     let lastTick = 0;
+    let held = new Array(BAR_COUNT).fill(0);
     const loop = (ts: number) => {
       const levels = readFftLevels(BAR_COUNT);
-      setBars(levels);
+      // Snap up instantly to new peaks, then ease back down so each bar
+      // "pops" on a hit and falls smoothly — classic equalizer feel.
+      held = levels.map((lv, i) => (lv >= held[i] ? lv : held[i] * 0.86));
+      setBars(held);
       setRms(getRmsLevel());
       if (ts - lastTick > 90) {
         setTick((n) => n + 1);
@@ -69,11 +73,11 @@ export function Visualizer() {
             return (
               <div
                 key={i}
-                className="flex-1 transition-[height] duration-75"
+                className="flex-1"
                 style={{
                   height: `${h}%`,
                   background: c,
-                  boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.5), 0 0 ${level * 14}px ${c}80`,
+                  boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.5), 0 0 ${level * 16}px ${c}80`,
                 }}
               />
             );
