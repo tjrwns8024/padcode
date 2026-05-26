@@ -1,10 +1,10 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCellsStore } from "@/stores/cells";
 import { useUIStore } from "@/stores/ui";
 import { useSamplesStore, type SampleEntry } from "@/stores/samples";
 import { ensureAudioContext } from "@/lib/audio/engine";
-import { loadSampleFromUrl, removeSample as removeSampleBuf } from "@/lib/audio/sampleBank";
+import { loadSampleFromFile, removeSample as removeSampleBuf } from "@/lib/audio/sampleBank";
 
 type Preset = {
   name: string;
@@ -44,6 +44,10 @@ export function Sidebar() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    console.log("[samples store] now has", samples.length, samples.map((s) => s.name));
+  }, [samples]);
+
   const insert = (code: string) => {
     if (!selectedCellId) return;
     setCode(selectedCellId, code);
@@ -56,10 +60,7 @@ export function Sidebar() {
     e.target.value = "";
     if (!file) return;
     setError(null);
-    if (!/audio\//.test(file.type) && !/\.(mp3|wav|ogg|m4a)$/i.test(file.name)) {
-      setError("오디오 파일만 가능");
-      return;
-    }
+    console.log("[sample upload] picked", file.name, file.type, file.size);
     if (file.size > 20 * 1024 * 1024) {
       setError("20MB 이하만 가능");
       return;
@@ -73,12 +74,15 @@ export function Sidebar() {
     setUploading(true);
     try {
       await ensureAudioContext();
+      console.log("[sample upload] audio context ready, decoding…");
+      await loadSampleFromFile(name, file);
+      console.log("[sample upload] decoded:", name);
       const url = URL.createObjectURL(file);
-      await loadSampleFromUrl(name, url);
       const entry: SampleEntry = { name, fileName: file.name, size: file.size, url };
       addSample(entry);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "업로드 실패");
+      console.error("[sample upload] failed", err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
     }
@@ -90,79 +94,79 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="border-4 border-arcade-maze bg-arcade-bg p-3.5 overflow-y-auto">
-      <div className="text-[9px] tracking-[1.5px] text-arcade-pac text-center mb-3 pb-2.5 border-b-2 border-dotted border-arcade-dim">
-        SOUND BANK
+    <aside className="border-4 border-arcade-maze bg-arcade-bg p-3.5 overflow-y-auto flex flex-col">
+      <div className="text-[9px] tracking-[1.5px] text-arcade-pac text-center mb-2 pb-2 border-b-2 border-dotted border-arcade-dim">
+        MY SAMPLES ({samples.length})
       </div>
-      {PRESETS.map((p) => (
-        <button
-          key={p.name}
-          onClick={() => insert(p.code)}
-          disabled={!selectedCellId}
-          className="flex items-center gap-2 px-1.5 py-2 border-2 border-transparent hover:border-arcade-dim w-full text-left text-[9px] tracking-[1px] disabled:opacity-40 mb-1 disabled:cursor-not-allowed cursor-pointer"
-        >
-          <span className="w-4 h-4 flex-shrink-0" style={{ background: p.color }} />
-          <span className="flex-1">{p.name}</span>
-        </button>
-      ))}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="audio/*,.mp3,.wav,.ogg,.m4a"
+        onChange={onFile}
+        className="hidden"
+      />
+      <button
+        onClick={onPick}
+        disabled={uploading}
+        className="w-full py-2 border-2 border-arcade-pac text-arcade-pac text-[9px] tracking-[1.5px] hover:bg-arcade-pac hover:text-arcade-bg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {uploading ? "LOADING…" : "+ UPLOAD MP3"}
+      </button>
+
+      {error && (
+        <div className="text-[8px] tracking-[1px] text-arcade-red mt-2 leading-relaxed">
+          ! {error}
+        </div>
+      )}
+
+      {samples.length === 0 && !error && (
+        <div className="text-[8px] tracking-[1px] text-arcade-dim mt-2 leading-relaxed">
+          MP3/WAV을 업로드하면 샘플("이름")으로 사용 가능
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-col gap-1">
+        {samples.map((s) => (
+          <div
+            key={s.name}
+            className="flex items-center gap-1.5 border-2 border-transparent hover:border-arcade-dim"
+          >
+            <button
+              onClick={() => insert(`샘플("${s.name}").게인(1)`)}
+              disabled={!selectedCellId}
+              title={s.fileName}
+              className="flex items-center gap-2 px-1.5 py-2 flex-1 text-left text-[9px] tracking-[1px] text-arcade-dot disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer overflow-hidden"
+            >
+              <span className="w-4 h-4 flex-shrink-0 bg-arcade-cyan" />
+              <span className="flex-1 truncate">{s.name}</span>
+            </button>
+            <button
+              onClick={() => onRemove(s.name)}
+              aria-label={`remove ${s.name}`}
+              className="text-[10px] text-arcade-dim hover:text-arcade-red px-1.5 py-2 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
 
       <div className="mt-4 pt-3 border-t-2 border-dotted border-arcade-dim">
         <div className="text-[9px] tracking-[1.5px] text-arcade-pac text-center mb-2">
-          MY SAMPLES
+          SOUND BANK
         </div>
-
-        <input
-          ref={fileRef}
-          type="file"
-          accept="audio/*,.mp3,.wav,.ogg,.m4a"
-          onChange={onFile}
-          className="hidden"
-        />
-        <button
-          onClick={onPick}
-          disabled={uploading}
-          className="w-full py-2 border-2 border-arcade-pac text-arcade-pac text-[9px] tracking-[1.5px] hover:bg-arcade-pac hover:text-arcade-bg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {uploading ? "LOADING…" : "+ UPLOAD MP3"}
-        </button>
-
-        {error && (
-          <div className="text-[8px] tracking-[1px] text-arcade-red mt-2 leading-relaxed">
-            ! {error}
-          </div>
-        )}
-
-        {samples.length === 0 && !error && (
-          <div className="text-[8px] tracking-[1px] text-arcade-dim mt-2 leading-relaxed">
-            MP3/WAV을 업로드하면 샘플("이름")으로 사용 가능
-          </div>
-        )}
-
-        <div className="mt-2 flex flex-col gap-1">
-          {samples.map((s) => (
-            <div
-              key={s.name}
-              className="flex items-center gap-1.5 border-2 border-transparent hover:border-arcade-dim"
-            >
-              <button
-                onClick={() => insert(`샘플("${s.name}").게인(1)`)}
-                disabled={!selectedCellId}
-                title={s.fileName}
-                className="flex items-center gap-2 px-1.5 py-2 flex-1 text-left text-[9px] tracking-[1px] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer overflow-hidden"
-              >
-                <span className="w-4 h-4 flex-shrink-0 bg-arcade-cyan" />
-                <span className="flex-1 truncate">{s.name}</span>
-              </button>
-              <button
-                onClick={() => onRemove(s.name)}
-                aria-label={`remove ${s.name}`}
-                className="text-[10px] text-arcade-dim hover:text-arcade-red px-1.5 py-2 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
+        {PRESETS.map((p) => (
+          <button
+            key={p.name}
+            onClick={() => insert(p.code)}
+            disabled={!selectedCellId}
+            className="flex items-center gap-2 px-1.5 py-2 border-2 border-transparent hover:border-arcade-dim w-full text-left text-[9px] tracking-[1px] disabled:opacity-40 mb-1 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <span className="w-4 h-4 flex-shrink-0" style={{ background: p.color }} />
+            <span className="flex-1">{p.name}</span>
+          </button>
+        ))}
       </div>
     </aside>
   );

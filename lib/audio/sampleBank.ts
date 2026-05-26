@@ -7,13 +7,15 @@ function key(name: string) {
   return name.trim().toLowerCase();
 }
 
-export async function loadSampleFromUrl(name: string, url: string): Promise<void> {
+export async function loadSampleFromFile(name: string, file: File): Promise<void> {
   const k = key(name);
-  const buf = new Tone.ToneAudioBuffer();
-  await buf.load(url);
+  const arrayBuf = await file.arrayBuffer();
+  const ctx = Tone.getContext().rawContext as unknown as AudioContext;
+  const audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
+  const toneBuf = new Tone.ToneAudioBuffer(audioBuffer);
   const old = buffers.get(k);
   if (old) old.dispose();
-  buffers.set(k, buf);
+  buffers.set(k, toneBuf);
 }
 
 export function getSampleBuffer(name: string): Tone.ToneAudioBuffer | null {
