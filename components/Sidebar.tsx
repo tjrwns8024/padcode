@@ -8,20 +8,19 @@ import { loadSampleFromUrl, removeSample as removeSampleBuf } from "@/lib/audio/
 
 type Preset = {
   name: string;
-  key: string;
   color: string;
   code: string;
 };
 
 const PRESETS: Preset[] = [
-  { name: "KICK", key: "Q", color: "#ff2020", code: '샘플("kick").게인(1)' },
-  { name: "SNARE", key: "W", color: "#ffb8de", code: '샘플("snare").게인(0.8)' },
-  { name: "HAT", key: "A", color: "#00ffe9", code: '샘플("hat").게인(0.5)' },
-  { name: "SINE", key: "E", color: "#ffe900", code: "사인파(440).게인(0.4).스무딩(30)" },
-  { name: "BASS", key: "S", color: "#ff9b1a", code: "사인파(80).게인(0.7).로우패스(200)" },
-  { name: "ARP", key: "C", color: "#ffe900", code: "사인파(660).게인(0.3).딜레이(0.125).에코(20)" },
-  { name: "CLAP", key: "Z", color: "#ffffff", code: '샘플("clap").게인(0.7)' },
-  { name: "DELAY", key: "", color: "#ffe900", code: "노이즈().게인(0.2).밴드패스(2000).딜레이(0.25)" },
+  { name: "KICK", color: "#ff2020", code: '샘플("kick").게인(1)' },
+  { name: "SNARE", color: "#ffb8de", code: '샘플("snare").게인(0.8)' },
+  { name: "HAT", color: "#00ffe9", code: '샘플("hat").게인(0.5)' },
+  { name: "SINE", color: "#ffe900", code: "사인파(440).게인(0.4).스무딩(30)" },
+  { name: "BASS", color: "#ff9b1a", code: "사인파(80).게인(0.7).로우패스(200)" },
+  { name: "ARP", color: "#ffe900", code: "사인파(660).게인(0.3).딜레이(0.125).에코(20)" },
+  { name: "CLAP", color: "#ffffff", code: '샘플("clap").게인(0.7)' },
+  { name: "DELAY", color: "#ffe900", code: "노이즈().게인(0.2).밴드패스(2000).딜레이(0.25)" },
 ];
 
 function sanitizeName(raw: string): string {
@@ -104,9 +103,6 @@ export function Sidebar() {
         >
           <span className="w-4 h-4 flex-shrink-0" style={{ background: p.color }} />
           <span className="flex-1">{p.name}</span>
-          {p.key && (
-            <span className="text-[8px] text-arcade-dim border border-arcade-dim px-1 py-0.5">{p.key}</span>
-          )}
         </button>
       ))}
 
