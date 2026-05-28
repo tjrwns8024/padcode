@@ -12,8 +12,8 @@ const DSL_SIGNATURES: Record<string, { detail: string; info: string }> = {
   sample: { detail: "name: string", info: '"kick" "snare" "hat" "clap" "tom" "cymbal"\n예) sample("kick").gain(1)' },
   플럭:  { detail: "freq: number", info: "기타/현악기 튕기는 소리\n예) 플럭(330).게인(0.6)" },
   pluck:  { detail: "freq: number", info: "기타/현악기 튕기는 소리\n예) pluck(330).gain(0.6)" },
-  베이스: { detail: "freq: number", info: "신스 베이스 (사각파)\n예) 베이스(80).게인(0.8)" },
-  bass:   { detail: "freq: number", info: "신스 베이스 (사각파)\n예) bass(80).gain(0.8)" },
+  베이스: { detail: "freq: number", info: "신스 베이스 (톱니파)\n예) 베이스(80).게인(0.8)" },
+  bass:   { detail: "freq: number", info: "신스 베이스 (톱니파)\n예) bass(80).gain(0.8)" },
   피아노: { detail: "freq: number", info: "삼각파 피아노 음색\n예) 피아노(440).게인(0.5)" },
   piano:  { detail: "freq: number", info: "삼각파 피아노 음색\n예) piano(440).gain(0.5)" },
   오르간: { detail: "freq: number", info: "AM 신스 오르간 음색\n예) 오르간(220).게인(0.6)" },
@@ -60,7 +60,7 @@ const HELP_TEXT =
 // 노이즈()            화이트 노이즈
 // 샘플("name")        드럼 샘플: kick snare hat clap tom cymbal
 // 플럭(freq)          기타/현악기 튕기는 소리
-// 베이스(freq)        신스 베이스 (사각파)
+// 베이스(freq)        신스 베이스 (톱니파)
 // 피아노(freq)        삼각파 피아노 음색
 // 오르간(freq)        AM 신스 오르간 음색
 //
