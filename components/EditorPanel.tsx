@@ -30,11 +30,35 @@ export function EditorPanel() {
   const cell = useCellsStore((s) => (selectedCellId ? s.cells[selectedCellId] : null));
   const setCode = useCellsStore((s) => s.setCode);
   const [savedFlash, setSavedFlash] = useState(0);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedCellId) return;
     setSavedFlash((n) => n + 1);
   }, [cell?.code, selectedCellId]);
+
+  const generateSound = async () => {
+    if (!selectedCellId || !aiPrompt.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/generate-sound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "생성 실패");
+      setCode(selectedCellId, data.code);
+      setAiPrompt("");
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "생성 실패");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   return (
     <aside className="border-4 border-arcade-maze bg-arcade-bg flex flex-col overflow-hidden h-full">
@@ -80,6 +104,34 @@ export function EditorPanel() {
             <div>&nbsp;</div>
             <div className="text-arcade-pac">► READY.</div>
           </div>
+        )}
+      </div>
+
+      <div className="border-t-2 border-arcade-maze px-3 py-2 flex flex-col gap-1.5">
+        <div className="text-[8px] tracking-[2px] text-arcade-pac">► AI SOUND GEN</div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") generateSound(); }}
+            disabled={!selectedCellId || aiLoading}
+            placeholder={selectedCellId ? "사운드를 설명하세요..." : "패드를 먼저 선택하세요"}
+            className="flex-1 bg-transparent border border-arcade-dim text-arcade-phosphor text-[10px] tracking-[0.5px] px-2 py-1 placeholder:text-arcade-dim/50 disabled:opacity-40 outline-none focus:border-arcade-pac font-crt"
+          />
+          <button
+            onClick={generateSound}
+            disabled={!selectedCellId || !aiPrompt.trim() || aiLoading}
+            className="px-2 py-1 border border-arcade-pac text-arcade-pac text-[9px] tracking-[1px] hover:bg-arcade-pac hover:text-arcade-bg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            {aiLoading ? "…" : "GEN"}
+          </button>
+        </div>
+        {aiLoading && (
+          <div className="text-[8px] tracking-[2px] text-arcade-pac animate-blink">► GENERATING SOUND...</div>
+        )}
+        {!aiLoading && aiError && (
+          <div className="text-[8px] tracking-[1px] text-arcade-red leading-relaxed truncate">! {aiError}</div>
         )}
       </div>
 

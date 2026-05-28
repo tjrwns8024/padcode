@@ -8,7 +8,7 @@ export type CompiledSound = {
   meta: { source: SourceKind; effects: string[] };
 };
 
-type SourceKind = "sine" | "noise" | "sample";
+type SourceKind = "sine" | "noise" | "sample" | "pluck" | "bass" | "piano" | "organ";
 
 class SoundBuilder {
   source: SourceKind = "sine";
@@ -40,6 +40,30 @@ class SoundBuilder {
     const b = new SoundBuilder();
     b.source = "sample";
     b.sampleName = name;
+    return b;
+  }
+  static pluck(freq: number) {
+    const b = new SoundBuilder();
+    b.source = "pluck";
+    b.freq = freq;
+    return b;
+  }
+  static bass(freq: number) {
+    const b = new SoundBuilder();
+    b.source = "bass";
+    b.freq = freq;
+    return b;
+  }
+  static piano(freq: number) {
+    const b = new SoundBuilder();
+    b.source = "piano";
+    b.freq = freq;
+    return b;
+  }
+  static organ(freq: number) {
+    const b = new SoundBuilder();
+    b.source = "organ";
+    b.freq = freq;
     return b;
   }
 
@@ -138,6 +162,37 @@ class SoundBuilder {
         }, (0.2 + release) * 1000 + 100);
       } else if (this.source === "sample") {
         triggerDrumSynth(this.sampleName, gainNode, attack);
+      } else if (this.source === "pluck") {
+        const synth = new Tone.PluckSynth({ attackNoise: 1, dampening: 4000, resonance: 0.98 });
+        synth.connect(gainNode);
+        synth.triggerAttackRelease(this.freq, "4n");
+        setTimeout(() => synth.dispose(), 4000);
+      } else if (this.source === "bass") {
+        const synth = new Tone.MonoSynth({
+          oscillator: { type: "sawtooth" },
+          envelope: { attack: 0.02, decay: 0.3, sustain: 0.7, release: 0.4 },
+          filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.3, baseFrequency: 150, octaves: 2 },
+        });
+        synth.connect(gainNode);
+        synth.triggerAttackRelease(this.freq, "8n");
+        setTimeout(() => synth.dispose(), 2000);
+      } else if (this.source === "piano") {
+        const synth = new Tone.Synth({
+          oscillator: { type: "triangle" },
+          envelope: { attack: 0.005, decay: 0.4, sustain: 0.1, release: 1.5 },
+        });
+        synth.connect(gainNode);
+        synth.triggerAttackRelease(this.freq, "8n");
+        setTimeout(() => synth.dispose(), 3000);
+      } else if (this.source === "organ") {
+        const synth = new Tone.AMSynth({
+          harmonicity: 2,
+          envelope: { attack: 0.01, decay: 0, sustain: 1, release: 0.3 },
+          modulationEnvelope: { attack: 0.5, decay: 0, sustain: 1, release: 0.5 },
+        });
+        synth.connect(gainNode);
+        synth.triggerAttackRelease(this.freq, "8n");
+        setTimeout(() => synth.dispose(), 2500);
       }
     };
 
@@ -284,33 +339,21 @@ export const DSL_BINDINGS = {
   noise: SoundBuilder.noise,
   샘플: SoundBuilder.sample,
   sample: SoundBuilder.sample,
+  플럭: SoundBuilder.pluck,
+  pluck: SoundBuilder.pluck,
+  베이스: SoundBuilder.bass,
+  bass: SoundBuilder.bass,
+  피아노: SoundBuilder.piano,
+  piano: SoundBuilder.piano,
+  오르간: SoundBuilder.organ,
+  organ: SoundBuilder.organ,
 } as const;
 
 export const DSL_FUNCTION_NAMES = [
-  "사인파",
-  "노이즈",
-  "샘플",
-  "게인",
-  "로우패스",
-  "밴드패스",
-  "딜레이",
-  "피치다운",
-  "스무딩",
-  "에코",
-  "스텝",
-  "확률",
-  "sin",
-  "noise",
-  "sample",
-  "gain",
-  "lowpass",
-  "bandpass",
-  "delay",
-  "pitch",
-  "smooth",
-  "echo",
-  "step",
-  "prob",
+  "사인파", "노이즈", "샘플", "플럭", "베이스", "피아노", "오르간",
+  "게인", "로우패스", "밴드패스", "딜레이", "피치다운", "스무딩", "에코", "스텝", "확률",
+  "sin", "noise", "sample", "pluck", "bass", "piano", "organ",
+  "gain", "lowpass", "bandpass", "delay", "pitch", "smooth", "echo", "step", "prob",
 ];
 
 const ENGLISH_TO_KOREAN_METHODS: Record<string, string> = {

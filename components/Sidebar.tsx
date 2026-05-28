@@ -94,7 +94,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="border-4 border-arcade-maze bg-arcade-bg p-3.5 overflow-y-auto flex flex-col">
+    <aside className="border-4 border-arcade-maze bg-arcade-bg p-3.5 overflow-y-auto flex flex-col h-full">
       <div className="text-[9px] tracking-[1.5px] text-arcade-pac text-center mb-2 pb-2 border-b-2 border-dotted border-arcade-dim">
         MY SAMPLES ({samples.length})
       </div>

@@ -10,6 +10,14 @@ const DSL_SIGNATURES: Record<string, { detail: string; info: string }> = {
   noise:  { detail: "()", info: "화이트 노이즈\n예) noise().gain(0.3)" },
   샘플:  { detail: "name: string", info: '"kick" "snare" "hat" "clap" "tom" "cymbal"\n예) 샘플("kick").게인(1)' },
   sample: { detail: "name: string", info: '"kick" "snare" "hat" "clap" "tom" "cymbal"\n예) sample("kick").gain(1)' },
+  플럭:  { detail: "freq: number", info: "기타/현악기 튕기는 소리\n예) 플럭(330).게인(0.6)" },
+  pluck:  { detail: "freq: number", info: "기타/현악기 튕기는 소리\n예) pluck(330).gain(0.6)" },
+  베이스: { detail: "freq: number", info: "신스 베이스 (사각파)\n예) 베이스(80).게인(0.8)" },
+  bass:   { detail: "freq: number", info: "신스 베이스 (사각파)\n예) bass(80).gain(0.8)" },
+  피아노: { detail: "freq: number", info: "삼각파 피아노 음색\n예) 피아노(440).게인(0.5)" },
+  piano:  { detail: "freq: number", info: "삼각파 피아노 음색\n예) piano(440).gain(0.5)" },
+  오르간: { detail: "freq: number", info: "AM 신스 오르간 음색\n예) 오르간(220).게인(0.6)" },
+  organ:  { detail: "freq: number", info: "AM 신스 오르간 음색\n예) organ(220).gain(0.6)" },
   게인:  { detail: "volume: 0~2",      info: "볼륨 조절. 기본값 0.6\n예) .게인(0.5)" },
   gain:   { detail: "volume: 0~2",      info: "볼륨 조절. 기본값 0.6\n예) .gain(0.5)" },
   로우패스: { detail: "hz: number",    info: "저역 통과 필터\n예) .로우패스(800)" },
@@ -51,6 +59,10 @@ const HELP_TEXT =
 // 사인파(freq)         사인파 오실레이터 (Hz)
 // 노이즈()            화이트 노이즈
 // 샘플("name")        드럼 샘플: kick snare hat clap tom cymbal
+// 플럭(freq)          기타/현악기 튕기는 소리
+// 베이스(freq)        신스 베이스 (사각파)
+// 피아노(freq)        삼각파 피아노 음색
+// 오르간(freq)        AM 신스 오르간 음색
 //
 // .게인(0~2)          볼륨  기본 0.6
 // .로우패스(hz)       저역 필터
@@ -62,8 +74,8 @@ const HELP_TEXT =
 // .스텝("x..x.")      스텝 패턴  x=트리거 .=쉬기
 // .확률(0~1)          랜덤 트리거 확률
 //
-// 영어 별칭: sin noise sample gain lowpass bandpass
-//           delay pitch smooth echo step prob`;
+// 영어 별칭: sin noise sample pluck bass piano organ
+//           gain lowpass bandpass delay pitch smooth echo step prob`;
 
 const GUIDE_TEXT =
 `// ─── 시작 가이드 ──────────────────────────────
