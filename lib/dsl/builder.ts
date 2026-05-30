@@ -137,17 +137,42 @@ class SoundBuilder {
     const trigger = () => {
       if (Math.random() > this.probability) return;
       if (this.source === "sine") {
-        const env = new Tone.AmplitudeEnvelope({ attack, decay: 0.05, sustain: 0.5, release });
+        // Low notes barely drive small speakers and read as quiet (equal-loudness),
+        // so give bass a fuller, longer body and reinforce it with a soft octave-up
+        // harmonic — the ear still perceives the low pitch ("missing fundamental")
+        // but it now cuts through laptop speakers instead of disappearing.
+        const isLow = this.freq < 160;
+        const noteLen = isLow ? 0.5 : 0.3;
+        const env = new Tone.AmplitudeEnvelope({
+          attack,
+          decay: 0.05,
+          sustain: isLow ? 0.85 : 0.5,
+          release,
+        });
         const osc = new Tone.Oscillator(this.freq, "sine");
         osc.connect(env);
+
+        let harm: Tone.Oscillator | null = null;
+        let harmGain: Tone.Gain | null = null;
+        if (isLow) {
+          harm = new Tone.Oscillator(this.freq * 2, "sine");
+          harmGain = new Tone.Gain(0.3);
+          harm.connect(harmGain);
+          harmGain.connect(env);
+        }
+
         env.connect(gainNode);
         osc.start();
-        env.triggerAttackRelease(0.3);
+        harm?.start();
+        env.triggerAttackRelease(noteLen);
         setTimeout(() => {
           osc.stop();
           osc.dispose();
+          harm?.stop();
+          harm?.dispose();
+          harmGain?.dispose();
           env.dispose();
-        }, (0.3 + release) * 1000 + 100);
+        }, (noteLen + release) * 1000 + 100);
       } else if (this.source === "noise") {
         const env = new Tone.AmplitudeEnvelope({ attack, decay: 0.05, sustain: 0.3, release });
         const n = new Tone.Noise("white");
