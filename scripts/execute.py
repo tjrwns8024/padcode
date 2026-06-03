@@ -61,13 +61,15 @@ class StepExecutor:
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
 
-    def __init__(self, phase_dir_name: str, *, auto_push: bool = False):
+    def __init__(self, phase_dir_name: str, *, auto_push: bool = False,
+                 review_enabled: bool = True):
         self._root = str(ROOT)
         self._phases_dir = ROOT / "phases"
         self._phase_dir = self._phases_dir / phase_dir_name
         self._phase_dir_name = phase_dir_name
         self._top_index_file = self._phases_dir / "index.json"
         self._auto_push = auto_push
+        self._review_enabled = review_enabled
 
         if not self._phase_dir.is_dir():
             print(f"ERROR: {self._phase_dir} not found")
@@ -421,6 +423,25 @@ class StepExecutor:
         self._write_json(verdict_path, verdict)
         return verdict
 
+    @staticmethod
+    def _review_gate_decision(approved: bool, review_round: int, max_rounds: int) -> str:
+        """
+        codex 리뷰 verdict와 누적 거부 횟수로 다음 행동을 결정하는 순수 함수.
+
+        반환:
+          - "commit": 승인됨 → 커밋 진행.
+          - "rerun":  거부됐고 라운드 예산이 남음 → step 재실행.
+          - "error":  거부됐고 라운드 예산 소진 → error 전이.
+
+        review_round 는 '이번 거부를 포함한' 누적 거부 횟수다.
+        approved=True 면 라운드와 무관하게 항상 커밋한다.
+        """
+        if approved:
+            return "commit"
+        if review_round <= max_rounds:
+            return "rerun"
+        return "error"
+
     def _build_review_prompt(self, step_num: int, step_name: str,
                              diff_text: str, untracked_text: str) -> str:
         return (
@@ -449,6 +470,12 @@ class StepExecutor:
         print(f"  Phase: {self._phase_name} | Steps: {self._total}")
         if self._auto_push:
             print(f"  Auto-push: enabled")
+        if not self._review_enabled:
+            print(f"  Codex review: disabled")
+        elif self._codex_available():
+            print(f"  Codex review: enabled (max {self.MAX_REVIEW_ROUNDS} rounds)")
+        else:
+            print(f"  Codex review: enabled (codex 미발견 — 런타임 skip)")
         print(f"{'='*60}")
 
     def _check_blockers(self):
@@ -476,10 +503,86 @@ class StepExecutor:
     # --- 실행 루프 ---
 
     def _execute_single_step(self, step: dict, guardrails: str) -> bool:
-        """단일 step 실행 (재시도 포함). 완료되면 True, 실패/차단이면 False."""
+        """
+        단일 step 실행. 완료되면 True (실패/차단 시 내부에서 sys.exit).
+
+        두 개의 독립 카운터로 동작한다:
+          - AC 재시도(MAX_RETRIES): _run_ac_attempts 내부에서 소진.
+          - codex 리뷰 라운드(MAX_REVIEW_ROUNDS): 이 메서드의 바깥 루프에서 소진.
+
+        한 step이 통과하려면 AC 통과 '그리고' codex approved 둘 다 만족해야 한다.
+        """
+        step_num, step_name = step["step"], step["name"]
+        review_round = 0
+        review_feedback = None  # codex 거부 피드백을 다음 재실행 preamble로 전달
+
+        while True:
+            # AC 재시도 사이클 — AC 통과 시 elapsed(초) 반환, 실패/차단이면 내부에서 sys.exit.
+            elapsed = self._run_ac_attempts(step, guardrails, review_feedback)
+
+            # 리뷰 비활성화 → 게이트 건너뛰고 기존대로 커밋.
+            if not self._review_enabled:
+                self._commit_step(step_num, step_name)
+                print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
+                return True
+
+            verdict = self._run_codex_review(step_num, step_name)
+            decision = self._review_gate_decision(
+                verdict["approved"], review_round + 1, self.MAX_REVIEW_ROUNDS
+            )
+
+            if decision == "commit":
+                self._commit_step(step_num, step_name)
+                print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
+                return True
+
+            # 여기부터는 codex 거부. 절대 커밋하지 않는다.
+            review_round += 1
+            issues = verdict.get("blocking_issues") or ["(구체적 지적 없음)"]
+
+            if decision == "rerun":
+                index = self._read_json(self._index_file)
+                for s in index["steps"]:
+                    if s["step"] == step_num:
+                        s["status"] = "pending"
+                        s.pop("error_message", None)
+                        s.pop("completed_at", None)
+                self._write_json(self._index_file, index)
+                review_feedback = "[codex 리뷰 지적]\n" + "\n".join(issues)
+                print(f"  ⟳ Step {step_num}: codex 리뷰 거부 — 재실행 {review_round}/{self.MAX_REVIEW_ROUNDS}")
+                for issue in issues:
+                    print(f"      • {issue}")
+                continue
+
+            # decision == "error": 리뷰 라운드 예산 소진.
+            ts = self._stamp()
+            index = self._read_json(self._index_file)
+            for s in index["steps"]:
+                if s["step"] == step_num:
+                    s["status"] = "error"
+                    s["error_message"] = (
+                        f"codex 리뷰 {self.MAX_REVIEW_ROUNDS}회 거부: {'; '.join(issues)}"
+                    )
+                    s["failed_at"] = ts
+            self._write_json(self._index_file, index)
+            self._commit_step(step_num, step_name)
+            print(f"  ✗ Step {step_num}: {step_name} codex 리뷰 {self.MAX_REVIEW_ROUNDS}회 거부")
+            print(f"    Issues: {'; '.join(issues)}")
+            self._update_top_index("error")
+            sys.exit(1)
+
+    def _run_ac_attempts(self, step: dict, guardrails: str,
+                         initial_feedback: Optional[str]) -> int:
+        """
+        AC 재시도 루프. AC 통과 시 elapsed(초)를 반환한다(커밋하지 않음).
+        blocked → sys.exit(2). MAX_RETRIES 소진 → status error, 커밋, sys.exit(1).
+
+        initial_feedback 가 주어지면(codex 리뷰 거부 재실행) 첫 시도 preamble의
+        prev_error 로 주입되어 AC 실패 피드백과 동일 경로로 전달된다.
+        """
         step_num, step_name = step["step"], step["name"]
         done = sum(1 for s in self._read_json(self._index_file)["steps"] if s["status"] == "completed")
-        prev_error = None
+        prev_error = initial_feedback
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             index = self._read_json(self._index_file)
@@ -489,6 +592,8 @@ class StepExecutor:
             tag = f"Step {step_num}/{self._total - 1} ({done} done): {step_name}"
             if attempt > 1:
                 tag += f" [retry {attempt}/{self.MAX_RETRIES}]"
+            elif initial_feedback:
+                tag += " [codex 재실행]"
 
             with progress_indicator(tag) as pi:
                 self._invoke_claude(step, preamble)
@@ -503,9 +608,7 @@ class StepExecutor:
                     if s["step"] == step_num:
                         s["completed_at"] = ts
                 self._write_json(self._index_file, index)
-                self._commit_step(step_num, step_name)
-                print(f"  ✓ Step {step_num}: {step_name} [{elapsed}s]")
-                return True
+                return elapsed
 
             if status == "blocked":
                 for s in index["steps"]:
@@ -544,7 +647,7 @@ class StepExecutor:
                 self._update_top_index("error")
                 sys.exit(1)
 
-        return False  # unreachable
+        return 0  # unreachable
 
     def _execute_all_steps(self, guardrails: str):
         while True:
@@ -593,9 +696,12 @@ def main():
     parser = argparse.ArgumentParser(description="Harness Step Executor")
     parser.add_argument("phase_dir", help="Phase directory name (e.g. 0-mvp)")
     parser.add_argument("--push", action="store_true", help="Push branch after completion")
+    parser.add_argument("--no-review", action="store_true",
+                        help="커밋 전 codex 리뷰 게이트를 비활성화한다")
     args = parser.parse_args()
 
-    StepExecutor(args.phase_dir, auto_push=args.push).run()
+    StepExecutor(args.phase_dir, auto_push=args.push,
+                 review_enabled=not args.no_review).run()
 
 
 if __name__ == "__main__":

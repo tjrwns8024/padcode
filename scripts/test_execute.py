@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from execute import StepExecutor
 
 parse = StepExecutor._parse_review_verdict
+decide = StepExecutor._review_gate_decision
 
 
 def test_pure_json():
@@ -85,6 +86,32 @@ def test_last_block_wins():
     assert v["summary"] == "second", v
 
 
+# --- review gate decision (approved 분기 / round 카운팅 / error 경계) ---
+
+MAX = StepExecutor.MAX_REVIEW_ROUNDS  # 기본 2
+
+
+def test_decision_approved_commits():
+    # approved=True 면 라운드와 무관하게 항상 커밋한다.
+    assert decide(True, 1, MAX) == "commit"
+    assert decide(True, MAX + 5, MAX) == "commit"
+
+
+def test_decision_reject_within_budget_reruns():
+    # 거부됐지만 누적 라운드가 예산 이내 → 재실행.
+    assert decide(False, 1, MAX) == "rerun"
+
+
+def test_decision_reject_at_budget_boundary_reruns():
+    # round == MAX 경계도 아직 재실행이다.
+    assert decide(False, MAX, MAX) == "rerun"
+
+
+def test_decision_reject_over_budget_errors():
+    # 예산 초과 → error 전이.
+    assert decide(False, MAX + 1, MAX) == "error"
+
+
 def main():
     tests = [
         test_pure_json,
@@ -95,6 +122,10 @@ def main():
         test_missing_approved_only,
         test_approved_must_be_strict_true,
         test_last_block_wins,
+        test_decision_approved_commits,
+        test_decision_reject_within_budget_reruns,
+        test_decision_reject_at_budget_boundary_reruns,
+        test_decision_reject_over_budget_errors,
     ]
     failures = 0
     for t in tests:
