@@ -38,6 +38,8 @@ export function Pad({ cellId }: { cellId: string }) {
 
   return (
     <div
+      data-testid="pad"
+      data-cell-id={cellId}
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={`relative cursor-pointer flex flex-col items-center justify-center p-2 transition-transform hover:-translate-y-0.5 select-none ${
