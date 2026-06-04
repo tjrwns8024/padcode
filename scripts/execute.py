@@ -11,6 +11,7 @@ import contextlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -57,6 +58,7 @@ class StepExecutor:
     MAX_RETRIES = 3
     MAX_REVIEW_ROUNDS = 2   # codex 리뷰 거부 시 step 재실행 최대 횟수
     REVIEW_TIMEOUT = 1800   # codex exec 타임아웃(초)
+    CLAUDE_TIMEOUT = 3600   # 단일 step claude 세션 타임아웃(초). e2e 등 무거운 step 여유 확보.
     FEAT_MSG = "feat({phase}): step {num} — {name}"
     CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
@@ -231,6 +233,14 @@ class StepExecutor:
 
     # --- Claude 호출 ---
 
+    @staticmethod
+    def _kill_group(proc: subprocess.Popen):
+        """proc 의 프로세스 그룹 전체(claude + 손자 npm/next/playwright)를 SIGKILL 한다."""
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
     def _invoke_claude(self, step: dict, preamble: str) -> dict:
         step_num, step_name = step["step"], step["name"]
         step_file = self._phase_dir / f"step{step_num}.md"
@@ -240,20 +250,49 @@ class StepExecutor:
             sys.exit(1)
 
         prompt = preamble + step_file.read_text()
-        result = subprocess.run(
-            ["claude", "-p", "--dangerously-skip-permissions", "--output-format", "json", prompt],
-            cwd=self._root, capture_output=True, text=True, timeout=1800,
-        )
+        cmd = ["claude", "-p", "--dangerously-skip-permissions", "--output-format", "json", prompt]
 
-        if result.returncode != 0:
-            print(f"\n  WARN: Claude가 비정상 종료됨 (code {result.returncode})")
-            if result.stderr:
-                print(f"  stderr: {result.stderr[:500]}")
+        # 자체 프로세스 그룹으로 띄워, 타임아웃 시 claude 가 띄운 손자 프로세스
+        # (npm/next/playwright 등)까지 그룹째 종료할 수 있게 한다. start_new_session=True
+        # 가 setsid 효과를 내므로 os.killpg 로 트리 전체를 정리한다.
+        proc = subprocess.Popen(
+            cmd, cwd=self._root,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True,
+        )
+        timed_out = False
+        try:
+            stdout, stderr = proc.communicate(timeout=self.CLAUDE_TIMEOUT)
+            returncode = proc.returncode
+        except KeyboardInterrupt:
+            # 사용자가 Ctrl-C 로 중단하면 start_new_session 때문에 SIGINT 가 claude
+            # 프로세스 그룹에 전달되지 않아 npm/next/playwright 자식들이 고아로 남는다.
+            # 그룹째 정리한 뒤 인터럽트를 전파한다.
+            self._kill_group(proc)
+            raise
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            self._kill_group(proc)
+            try:
+                stdout, stderr = proc.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                stdout, stderr = "", ""
+            returncode = -1
+            stderr = (stderr or "") + (
+                f"\n[harness] claude 세션이 {self.CLAUDE_TIMEOUT}s 타임아웃으로 "
+                f"프로세스 그룹째 강제 종료됨. 이 step은 실패한 시도로 처리되어 재시도된다."
+            )
+            print(f"\n  WARN: Claude 세션 타임아웃({self.CLAUDE_TIMEOUT}s) — 프로세스 그룹 종료 후 재시도 처리")
+
+        if not timed_out and returncode != 0:
+            print(f"\n  WARN: Claude가 비정상 종료됨 (code {returncode})")
+            if stderr:
+                print(f"  stderr: {stderr[:500]}")
 
         output = {
             "step": step_num, "name": step_name,
-            "exitCode": result.returncode,
-            "stdout": result.stdout, "stderr": result.stderr,
+            "exitCode": returncode, "timedOut": timed_out,
+            "stdout": stdout, "stderr": stderr,
         }
         out_path = self._phase_dir / f"step{step_num}-output.json"
         with open(out_path, "w") as f:
@@ -596,21 +635,26 @@ class StepExecutor:
                 tag += " [codex 재실행]"
 
             with progress_indicator(tag) as pi:
-                self._invoke_claude(step, preamble)
+                output = self._invoke_claude(step, preamble)
                 elapsed = int(pi.elapsed)
 
             index = self._read_json(self._index_file)
             status = next((s.get("status", "pending") for s in index["steps"] if s["step"] == step_num), "pending")
             ts = self._stamp()
 
-            if status == "completed":
+            # 타임아웃으로 강제 종료된 시도는 claude 가 이미 completed/blocked 를 index 에
+            # 써뒀더라도 인정하지 않는다(서버를 띄워둔 채 멈춘 행 등 부분 완료 방지).
+            # 실패한 시도로 보고 아래 재시도/에러 경로로 흘려보낸다.
+            timed_out = bool(output.get("timedOut"))
+
+            if status == "completed" and not timed_out:
                 for s in index["steps"]:
                     if s["step"] == step_num:
                         s["completed_at"] = ts
                 self._write_json(self._index_file, index)
                 return elapsed
 
-            if status == "blocked":
+            if status == "blocked" and not timed_out:
                 for s in index["steps"]:
                     if s["step"] == step_num:
                         s["blocked_at"] = ts
@@ -621,10 +665,13 @@ class StepExecutor:
                 self._update_top_index("blocked")
                 sys.exit(2)
 
-            err_msg = next(
-                (s.get("error_message", "Step did not update status") for s in index["steps"] if s["step"] == step_num),
-                "Step did not update status",
-            )
+            if timed_out:
+                err_msg = f"claude 세션 타임아웃({self.CLAUDE_TIMEOUT}s)으로 강제 종료됨 — 실패 시도 처리"
+            else:
+                err_msg = next(
+                    (s.get("error_message", "Step did not update status") for s in index["steps"] if s["step"] == step_num),
+                    "Step did not update status",
+                )
 
             if attempt < self.MAX_RETRIES:
                 for s in index["steps"]:
