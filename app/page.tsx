@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { PadGrid } from "@/components/PadGrid";
 import { EditorPanel } from "@/components/EditorPanel";
 import { Visualizer } from "@/components/Visualizer";
+import { StorageBootstrap } from "@/components/StorageBootstrap";
 import { useKeyboardTrigger } from "@/hooks/useKeyboardTrigger";
 
 export default function Page() {
@@ -32,6 +33,7 @@ export default function Page() {
       <div className="min-w-0 min-h-0 overflow-hidden" style={{ gridArea: "viz" }}>
         <Visualizer />
       </div>
+      <StorageBootstrap />
     </div>
   );
 }

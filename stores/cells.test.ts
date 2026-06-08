@@ -85,3 +85,30 @@ describe("toggleLoop", () => {
     expect(useCellsStore.getState().cells["r3c3"].looping).toBe(false);
   });
 });
+
+describe("loadSnapshot", () => {
+  it("스냅샷의 편집 필드를 해당 셀에 적용한다", () => {
+    useCellsStore.getState().loadSnapshot({
+      r0c0: { code: '샘플("kick").게인(1)', playMode: "loop", looping: true },
+    });
+    const cell = useCellsStore.getState().cells["r0c0"];
+    expect(cell.code).toBe('샘플("kick").게인(1)');
+    expect(cell.playMode).toBe("loop");
+    expect(cell.looping).toBe(true);
+    // 정적 필드는 그대로 유지된다.
+    expect(cell.row).toBe(0);
+    expect(cell.col).toBe(0);
+    expect(cell.keyBinding).toBe("1");
+  });
+
+  it("스냅샷에 없는 셀은 빈 코드·oneshot 으로 초기화한다(결정적 로드)", () => {
+    useCellsStore.getState().setCode("r1c1", "사인파(440)");
+    useCellsStore.getState().loadSnapshot({
+      r0c0: { code: "노이즈()", playMode: "oneshot", looping: false },
+    });
+    const cleared = useCellsStore.getState().cells["r1c1"];
+    expect(cleared.code).toBe("");
+    expect(cleared.playMode).toBe("oneshot");
+    expect(cleared.looping).toBe(false);
+  });
+});

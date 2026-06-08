@@ -5,6 +5,7 @@ import { useUIStore } from "@/stores/ui";
 import { useSamplesStore, type SampleEntry } from "@/stores/samples";
 import { ensureAudioContext } from "@/lib/audio/engine";
 import { loadSampleFromFile, removeSample as removeSampleBuf } from "@/lib/audio/sampleBank";
+import { SetList } from "@/components/SetList";
 
 type Preset = {
   name: string;
@@ -95,6 +96,8 @@ export function Sidebar() {
 
   return (
     <aside className="border-4 border-arcade-maze bg-arcade-bg p-3.5 overflow-y-auto flex flex-col h-full">
+      <SetList />
+
       <div className="text-[9px] tracking-[1.5px] text-arcade-pac text-center mb-2 pb-2 border-b-2 border-dotted border-arcade-dim">
         MY SAMPLES ({samples.length})
       </div>
